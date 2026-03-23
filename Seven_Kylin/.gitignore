@@ -1,0 +1,24 @@
+# 编译产物
+/build/
+/CMakeCache.txt
+/CMakeFiles/
+/Makefile
+/cmake_install.cmake
+/seven-cli
+
+# 临时文件
+*.o
+*.so
+*.a
+*.log
+*.tmp
+*.swp
+
+# 系统文件
+.DS_Store
+.idea/
+.vscode/
+
+# 麒麟V10编译临时文件
+/rpmbuild/
+/usr/local/bin/seven-cli
