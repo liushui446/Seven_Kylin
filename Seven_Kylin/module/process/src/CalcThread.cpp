@@ -165,6 +165,26 @@ namespace seven
 		return true;
 	}
 
+	bool CalcProcessThread::SetAddNodeTaskParam(UUVNode input)
+	{
+		std::lock_guard<std::mutex> lk(g_task_mutex);
+		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
+			return false;
+		}
+		AddNode(input.pos_.lon_deg, input.pos_.lat_deg, input.speed, input.heading, input.join_total_frames);
+		return true;
+	}
+
+	bool CalcProcessThread::SetRemoveNodeTaskParam()
+	{
+		std::lock_guard<std::mutex> lk(g_task_mutex);
+		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
+			return false;
+		}
+		RemoveLastNode();
+		return true;
+	}
+
 	bool CalcProcessThread::SerTurnTaskParam(double input)
 	{
 		std::lock_guard<std::mutex> lk(g_task_mutex);

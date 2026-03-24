@@ -345,6 +345,14 @@ namespace seven
         double target_y;  // 目标相对北向坐标 (m)
         double last_rel_x;// 上一帧相对东向坐标
         double last_rel_y;// 上一帧相对北向坐标
+
+        int join_total_frames = 0;
+        double join_progress = 0.0;
+        double leave_target_x = 0.0;
+        double leave_target_y = 0.0;
+        bool is_joining = false;
+        bool is_leaving = false;
+
         LLA pos_;         // 经纬度
 
         UUVNode() : id(0), speed(0.0), heading(0.0),
@@ -367,6 +375,14 @@ namespace seven
             this->target_y = other.target_y;
             this->last_rel_x = other.last_rel_x;
             this->last_rel_y = other.last_rel_y;
+
+            this->is_joining = other.is_joining;
+            this->join_progress = other.join_progress;
+            this->join_total_frames = other.join_total_frames;
+            this->is_leaving = other.is_leaving;
+            this->leave_target_x = other.leave_target_x;
+            this->leave_target_y = other.leave_target_y;
+
             this->pos_ = other.pos_;
 
             return *this;

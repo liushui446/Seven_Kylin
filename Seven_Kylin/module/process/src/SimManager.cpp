@@ -115,6 +115,8 @@ namespace seven {
                 //队形变换
                 bool isSwitch = input.get("isSwitch", false).asBool();
                 bool isTurn = input.get("isTurn", false).asBool();
+                bool isAdd = input.get("isAdd", false).asBool();
+                bool isRemove = input.get("isRemove", false).asBool();
                 
                 if (isSwitch)
                 {
@@ -148,6 +150,60 @@ namespace seven {
                         sim_state_ = SimState::ENDDING;
                         result["status"] = "error";
                         result["message"] = std::string("send turn command fail: ") + e.what();
+                        return -1;
+                    }
+                }
+
+                if (isAdd)
+                {
+                    try {
+                        UUVNode add_node_param;
+                        // ====================== 解析数组 add_node ======================
+                        const Json::Value& nodeArray = input["add_node"];
+                        if (nodeArray.isArray())
+                        {
+                            //下次加多节点
+                            for (int i = 0; i < nodeArray.size(); ++i)
+                            {
+                                const Json::Value& node = nodeArray[i];
+
+                                // 节点内部字段
+                                add_node_param.speed = node.get("speed", 0.0).asDouble();
+                                add_node_param.heading = node.get("heading", 0.0).asDouble();
+                                add_node_param.join_total_frames = node.get("join_frames", 10).asInt();
+
+                                // 位置 pos
+                                add_node_param.pos_.lat_deg = node["pos"].get("lat_deg", 0.0).asDouble();
+                                add_node_param.pos_.lon_deg = node["pos"].get("lon_deg", 0.0).asDouble();
+                            }
+                        }
+                        calc_thread_ptr->SetAddNodeTaskParam(add_node_param);
+                        result["status"] = "success";
+                        result["message_a"] = "add node command success!";
+                    }
+                    catch (const std::exception& e) {
+
+                        calc_thread_ptr->UnInit();
+                        sim_state_ == SimState::ENDDING;
+                        result["status"] = "error";
+                        result["message"] = std::string("add node command fail: ") + e.what();
+                        return -1;
+                    }
+                }
+
+                if (isRemove)
+                {
+                    try {
+                        calc_thread_ptr->SetRemoveNodeTaskParam();
+                        result["status"] = "success";
+                        result["message_a"] = "send remove node command success!";
+                    }
+                    catch (const std::exception& e) {
+
+                        calc_thread_ptr->UnInit();
+                        sim_state_ == SimState::ENDDING;
+                        result["status"] = "error";
+                        result["message"] = std::string("send remove node command fail: ") + e.what();
                         return -1;
                     }
                 }

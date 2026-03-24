@@ -140,8 +140,17 @@ namespace seven {
         //printf("\n✅ 切换队形：%s → %s，开始记录...\n", last_formation.c_str(), new_form.c_str());
     }
 
+    // ====================== 【新增】设置目标队形（过滤脱离节点） ======================
     void UUVFormationSimulator::_set_target_formation() {
-        int slave_count = static_cast<int>(nodes.size()) - 1;
+        // 过滤掉主节点和正在脱离的节点
+        std::vector<UUVNode*> valid_slaves;
+        for (size_t i = 1; i < nodes.size(); ++i) {
+            if (!nodes[i].is_leaving) {
+                valid_slaves.push_back(&nodes[i]);
+            }
+        }
+        
+        int slave_count = static_cast<int>(valid_slaves.size());
         if (slave_count <= 0) {
             return;
         }
@@ -149,16 +158,34 @@ namespace seven {
         auto positions = _generate_formation_positions(slave_count);
         for (int i = 0; i < slave_count; ++i) {
             if (i < static_cast<int>(positions.size())) {
-                nodes[i + 1].target_x = positions[i].first;
-                nodes[i + 1].target_y = positions[i].second;
+                valid_slaves[i]->target_x = positions[i].first;
+                valid_slaves[i]->target_y = positions[i].second;
             }
         }
     }
 
+    // ====================== 【修改】队形过渡（处理加入节点） ======================
     void UUVFormationSimulator::_transition_formation() {
         for (size_t i = 1; i < nodes.size(); ++i) {
-            nodes[i].rel_x += (nodes[i].target_x - nodes[i].rel_x) * TRANSITION_SPEED;
-            nodes[i].rel_y += (nodes[i].target_y - nodes[i].rel_y) * TRANSITION_SPEED;
+            UUVNode& node = nodes[i];
+            if (node.is_leaving) continue;
+
+            if (node.is_joining) {
+                // 更新加入进度
+                node.join_progress = std::min(1.0, node.join_progress + 1.0 / node.join_total_frames);
+                // 平滑移动
+                node.rel_x += (node.target_x - node.rel_x) * 0.1;
+                node.rel_y += (node.target_y - node.rel_y) * 0.1;
+                
+                if (node.join_progress >= 1.0) {
+                    node.is_joining = false;
+                    printf("✅ 节点 ID:%d 已完全加入编队\n", node.id);
+                }
+            } else {
+                // 普通节点过渡
+                node.rel_x += (node.target_x - node.rel_x) * TRANSITION_SPEED;
+                node.rel_y += (node.target_y - node.rel_y) * TRANSITION_SPEED;
+            }
         }
     }
 
@@ -371,7 +398,7 @@ namespace seven {
             } else if (num == 5) {
                 positions = {{0, d}, {-d, 0}, {d, 0}, {0, -d}};
             } else if (num == 6) {
-                positions = {{-2*d, 0}, {-d, 0}, {d, 0}, {2*d, 0}, {0, -d}};
+                positions = {{0, d}, {-d, 0}, {d, 0}, {0, -d}, {0, -2*d}};
             } else if (num == 7) {
                 positions = {{0, -d}, {-d, -2*d}, {0, -2*d}, {d, -2*d}, {0, -3*d}, {0, -4*d}};
             } else if (num == 8) {
@@ -435,22 +462,20 @@ namespace seven {
         return { lon, lat };
     }
 
+    // ====================== 【修改】更新机动（处理脱离节点） ======================
     void UUVFormationSimulator::_update_maneuver() {
-        //std::lock_guard<std::mutex> lock(sim_mutex);
         UUVNode& main = nodes[0];
         double dt = config.sim_step;
 
-        // 1. 更新主节点（完全对齐Python）
+        // 1. 更新主节点
         double current_v_main = config.init_speed + config.acceleration * current_time;
         current_v_main = std::max(0.1, current_v_main);
 
-        // 航向积分
         main.heading = fmod(main.heading + config.heading_rate * dt, 360.0);
         if (main.heading < 0) main.heading += 360.0;
         double main_hdg_rad = to_radians(main.heading);
         main.speed = current_v_main;
 
-        // 主节点位移
         double dx_main = current_v_main * std::sin(main_hdg_rad) * dt;
         double dy_main = current_v_main * std::cos(main_hdg_rad) * dt;
         auto [new_lon, new_lat] = _enu2geo(dx_main, dy_main, main.pos_.lon_deg, main.pos_.lat_deg);
@@ -461,61 +486,101 @@ namespace seven {
         _transition_formation();
         apply_collision_avoidance();
 
-        // 3. 角速度（弧度/秒）【核心新增】
+        // 3. 角速度
         double yaw_rate_deg = config.heading_rate;
         double w = to_radians(yaw_rate_deg);
 
-        // 4. 逐个从节点：速度分配 + 位置旋转（整体队形倾斜）【完全对齐Python】
+        // 收集需要移除的节点索引（逆序删除防止失效）
+        std::vector<size_t> indices_to_remove;
+
+        // 4. 逐个从节点处理
         for (size_t i = 1; i < nodes.size(); ++i) {
             UUVNode& node = nodes[i];
-            double rx = node.rel_x;   // 相对主节点的机体坐标系坐标
-            double ry = node.rel_y;
 
             // ---------------------------
-            // 关键：转弯时内外侧速度分配
+            // 处理脱离中的节点
             // ---------------------------
+            if (node.is_leaving) {
+                double dx = node.leave_target_x - node.rel_x;
+                double dy = node.leave_target_y - node.rel_y;
+                double dist = std::hypot(dx, dy);
+
+                if (dist > 0.5) {
+                    double dir_x = dx / dist;
+                    double dir_y = dy / dist;
+                    double move = 2 * current_v_main * dt;
+
+                    node.rel_x += dir_x * move;
+                    node.rel_y += dir_y * move;
+                    node.speed = 2 * current_v_main;
+
+                    double desired_heading_rad = std::atan2(dir_x, dir_y);
+                    double desired_heading = to_degrees(desired_heading_rad);
+                    desired_heading = fmod(desired_heading, 360.0);
+                    if (desired_heading < 0) desired_heading += 360.0;
+                    node.heading = desired_heading;
+                }
+                else {
+                    indices_to_remove.push_back(i);
+                    printf("✅ 节点 ID:%d 已到达脱离点并消失\n", node.id);
+                }
+
+                // 更新经纬度
+                auto [node_lon, node_lat] = _enu2geo(node.rel_x, node.rel_y, main.pos_.lon_deg, main.pos_.lat_deg);
+                node.pos_.lon_deg = node_lon;
+                node.pos_.lat_deg = node_lat;
+
+                continue;
+            }
+
+            // ---------------------------
+            // 普通节点处理
+            // ---------------------------
+            double rx = node.rel_x;
+            double ry = node.rel_y;
+
             double des_vx, des_vy;
             if (std::fabs(w) < 1e-4) {
-                // 直行：速度 = 主节点速度
                 des_vx = current_v_main * std::sin(main_hdg_rad);
                 des_vy = current_v_main * std::cos(main_hdg_rad);
-            } else {
-                // 转弯：外侧快、内侧慢
+            }
+            else {
                 double v_rel_x = -w * ry;
-                double v_rel_y =  w * rx;
+                double v_rel_y = w * rx;
                 des_vx = current_v_main * std::sin(main_hdg_rad) + v_rel_x;
                 des_vy = current_v_main * std::cos(main_hdg_rad) + v_rel_y;
             }
 
-            // 期望航速、航向
             double desired_speed = std::hypot(des_vx, des_vy);
             double desired_heading_rad = std::atan2(des_vx, des_vy);
             double desired_heading = to_degrees(desired_heading_rad);
             desired_heading = fmod(desired_heading, 360.0);
             if (desired_heading < 0) desired_heading += 360.0;
 
-            // 速度限幅
             desired_speed = std::min(desired_speed, MAX_SPEED);
 
-            // 更新节点速度与航向
             node.speed = desired_speed;
             node.heading = desired_heading;
 
-            // ---------------------------
-            // 关键：整体队形旋转（倾斜）
-            // 把相对坐标旋转到主节点当前航向 → 实现编队倾斜
-            // ---------------------------
             double x_world = rx * std::cos(main_hdg_rad) - ry * std::sin(main_hdg_rad);
             double y_world = rx * std::sin(main_hdg_rad) + ry * std::cos(main_hdg_rad);
 
-            // 用旋转后的全局相对位置计算经纬
             auto [node_lon, node_lat] = _enu2geo(x_world, y_world, main.pos_.lon_deg, main.pos_.lat_deg);
             node.pos_.lon_deg = node_lon;
             node.pos_.lat_deg = node_lat;
 
-            // 保存上一帧位置
             node.last_rel_x = rx;
             node.last_rel_y = ry;
+        }
+
+        // 移除到达脱离点的节点（逆序删除）
+        if (!indices_to_remove.empty()) {
+            std::sort(indices_to_remove.rbegin(), indices_to_remove.rend());
+            for (size_t idx : indices_to_remove) {
+                nodes.erase(nodes.begin() + idx);
+            }
+            config.node_num = static_cast<int>(nodes.size());
+            _set_target_formation();
         }
     }
 
@@ -529,6 +594,90 @@ namespace seven {
             //_record_transition_step();
         }
         return trajectory_;
+    }
+
+    // ====================== 【新增】添加节点 ======================
+    void UUVFormationSimulator::add_node(double lon, double lat, double speed, double heading, int join_frames) {
+        std::lock_guard<std::mutex> lock(sim_mutex);
+        if (nodes.size() >= 10) {
+            printf("❌ 已达到最大节点数10个，无法添加\n");
+            return;
+        }
+
+        max_id += 1;
+        UUVNode& main = nodes[0];
+
+        // 计算新节点相对于主节点的初始位置
+        auto [rel_x, rel_y] = _geo2enu(lon, lat, main.pos_.lon_deg, main.pos_.lat_deg);
+
+        // 创建新节点
+        UUVNode new_node;
+        new_node.id = max_id;
+        new_node.pos_.lon_deg = lon;
+        new_node.pos_.lat_deg = lat;
+        new_node.speed = speed;
+        new_node.heading = heading;
+        new_node.rel_x = rel_x;
+        new_node.rel_y = rel_y;
+        new_node.last_rel_x = rel_x;
+        new_node.last_rel_y = rel_y;
+        new_node.is_joining = true;
+        new_node.join_progress = 0.0;
+        new_node.join_total_frames = join_frames;
+        new_node.is_leaving = false;
+
+        nodes.push_back(new_node);
+        config.node_num = static_cast<int>(nodes.size());
+
+        _set_target_formation();
+        is_transition = true;
+
+        printf("\n✅ 成功添加节点 ID:%d\n", max_id);
+        printf("   所有节点正在重排为 %zu 节点队形...\n", nodes.size());
+    }
+
+    // ====================== 【新增】删除末尾节点 ======================
+    void UUVFormationSimulator::remove_last_node() {
+        std::lock_guard<std::mutex> lock(sim_mutex);
+        if (nodes.size() <= 2) {
+            printf("❌ 节点数过少，无法删除\n");
+            return;
+        }
+
+        // 找到最后一个非脱离状态的从节点
+        UUVNode* leave_node = nullptr;
+        for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
+            if (it->id != 0 && !it->is_leaving) {
+                leave_node = &(*it);
+                break;
+            }
+        }
+
+        if (!leave_node) {
+            printf("❌ 没有可删除的节点\n");
+            return;
+        }
+
+        leave_node->is_leaving = true;
+
+        // 计算脱离方向：与主节点航向相反
+        UUVNode& main = nodes[0];
+        double opposite_heading = fmod(main.heading + 180.0, 360.0);
+        if (opposite_heading < 0) opposite_heading += 360.0;
+        double opposite_rad = to_radians(opposite_heading);
+
+        double leave_dist = config.rel_distance * 10.0;
+        leave_node->leave_target_x = leave_dist * std::sin(opposite_rad);
+        leave_node->leave_target_y = leave_dist * std::cos(opposite_rad);
+
+        _set_target_formation();
+        is_transition = true;
+
+        printf("\n✅ 节点 ID:%d 开始脱离\n", leave_node->id);
+        printf("   脱离方向: 与编队航向相反 (%.0f°)\n", opposite_heading);
+
+        size_t remaining = std::count_if(nodes.begin(), nodes.end(), [](const UUVNode& n) { return !n.is_leaving; });
+        printf("   剩余节点已切换为 %zu 节点队形\n", remaining);
     }
 
     UAVTrajectory& UUVFormationSimulator::getUAVtrajectory()
@@ -626,6 +775,24 @@ namespace seven {
             printf("仿真器未初始化！\n");
         }
         g_pFormationSimulator->set_heading_rate(heading_rate);
+    }
+
+    // ====================== 【新增】外部接口：添加节点 ======================
+    void AddNode(double lon, double lat, double speed, double heading, int join_frames) {
+        if (g_pFormationSimulator == nullptr) {
+            printf("仿真器未初始化！\n");
+            return;
+        }
+        g_pFormationSimulator->add_node(lon, lat, speed, heading, join_frames);
+    }
+
+    // ====================== 【新增】外部接口：删除节点 ======================
+    void RemoveLastNode() {
+        if (g_pFormationSimulator == nullptr) {
+            printf("仿真器未初始化！\n");
+            return;
+        }
+        g_pFormationSimulator->remove_last_node();
     }
 
     //void Transformation_Use(CalcTempParam& task_param) {

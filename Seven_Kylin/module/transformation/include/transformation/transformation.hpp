@@ -68,6 +68,7 @@ namespace seven{
         double current_time;
         double last_output_time;
         bool is_transition;
+        int max_id; // 跟踪最大节点ID
         Formation_Type last_formation;
         std::mutex sim_mutex;  // 线程安全锁
 
@@ -94,6 +95,10 @@ namespace seven{
 
         // 仿真步进
         UAVTrajectory& step_simulation();
+
+        void add_node(double lon, double lat, double speed, double heading, int join_frames);
+
+        void remove_last_node();
 
         // 获取当前配置
         FormationConfig get_config() const { return config; }
