@@ -127,6 +127,9 @@ namespace seven{
 
     void SEVEN_EXPORTS TurnFormation(double heading_rate);
 
+    void SEVEN_EXPORTS AddNode(double lon, double lat, double speed, double heading, int join_frames);
+
+    void SEVEN_EXPORTS RemoveLastNode();
     // 全局仿真器实例（服务端单例使用）
     extern UUVFormationSimulator* g_pFormationSimulator;
 

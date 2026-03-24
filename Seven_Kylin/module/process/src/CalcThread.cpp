@@ -165,6 +165,16 @@ namespace seven
 		return true;
 	}
 
+	bool CalcProcessThread::SerTurnTaskParam(double input)
+	{
+		std::lock_guard<std::mutex> lk(g_task_mutex);
+		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
+			return false;
+		}
+		TurnFormation(input);
+		return true;
+	}
+
 	bool CalcProcessThread::SetAddNodeTaskParam(UUVNode input)
 	{
 		std::lock_guard<std::mutex> lk(g_task_mutex);
@@ -182,16 +192,6 @@ namespace seven
 			return false;
 		}
 		RemoveLastNode();
-		return true;
-	}
-
-	bool CalcProcessThread::SerTurnTaskParam(double input)
-	{
-		std::lock_guard<std::mutex> lk(g_task_mutex);
-		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
-			return false;
-		}
-		TurnFormation(input);
 		return true;
 	}
 
