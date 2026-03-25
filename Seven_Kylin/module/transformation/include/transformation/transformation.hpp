@@ -7,7 +7,6 @@ namespace seven{
 
     // 全局常量定义
     const double R_EARTH = 6378137.0;
-    const double WINDOW_RANGE = 80.0;
     const double TRANSITION_SPEED = 0.08;
     const double COLLISION_RADIUS = 4.0;
     const int MAX_COLLISION_ITER = 15;
@@ -15,8 +14,7 @@ namespace seven{
     const double ERROR_STABLE_THRESHOLD = 0.02;
 
     // 运动学物理约束
-    const double MAX_SPEED = 5.0;
-    const double MAX_TURN_RATE = 45.0;  // 最大转向速率 (度/秒)
+    const double MAX_SPEED = 1000.0;
 
     struct UUVNode;
     struct FormationConfig;
@@ -85,6 +83,7 @@ namespace seven{
         std::pair<double, double> _geo2enu(double lon, double lat, double rlon, double rlat);
         std::pair<double, double> _enu2geo(double x, double y, double rlon, double rlat);
         void _update_maneuver();
+        void _record_transition_step();
 
     public:
         // 构造函数
@@ -95,6 +94,8 @@ namespace seven{
 
         // 仿真步进
         UAVTrajectory& step_simulation();
+
+        void _record_transition_step();
 
         void add_node(double lon, double lat, double speed, double heading, int join_frames);
 

@@ -137,10 +137,10 @@ namespace seven {
         _set_target_formation();
         is_transition = true;
         //transition_data.clear();
-        //printf("\n✅ 切换队形：%s → %s，开始记录...\n", last_formation.c_str(), new_form.c_str());
+        printf("\n✅ 切换队形：%s → %s，开始记录...\n", last_formation.c_str(), config.trans_formation.c_str());
     }
 
-    // ====================== 【新增】设置目标队形（过滤脱离节点） ======================
+    // ====================== 设置目标队形 【给所有正在脱离的节点单独设置目标点】 ======================
     void UUVFormationSimulator::_set_target_formation() {
         // 过滤掉主节点和正在脱离的节点
         std::vector<UUVNode*> valid_slaves;
@@ -149,7 +149,7 @@ namespace seven {
                 valid_slaves.push_back(&nodes[i]);
             }
         }
-        
+
         int slave_count = static_cast<int>(valid_slaves.size());
         if (slave_count <= 0) {
             return;
@@ -162,29 +162,44 @@ namespace seven {
                 valid_slaves[i]->target_y = positions[i].second;
             }
         }
+
+        // 给所有正在脱离的节点单独设置目标点 = leave_target_x / leave_target_y
+        for (size_t i = 1; i < nodes.size(); ++i) {
+            UUVNode& node = nodes[i];
+            if (node.is_leaving) {
+                node.target_x = node.leave_target_x;
+                node.target_y = node.leave_target_y;
+                printf("脱离点消失位置更新为：%.1f, %.1f\n", node.target_x, node.target_y);
+            }
+        }
     }
 
-    // ====================== 【修改】队形过渡（处理加入节点） ======================
+    // ====================== 【修改】队形过渡【脱离节点也参与移动】 ======================
     void UUVFormationSimulator::_transition_formation() {
         for (size_t i = 1; i < nodes.size(); ++i) {
             UUVNode& node = nodes[i];
-            if (node.is_leaving) continue;
 
             if (node.is_joining) {
-                // 更新加入进度
                 node.join_progress = std::min(1.0, node.join_progress + 1.0 / node.join_total_frames);
-                // 平滑移动
                 node.rel_x += (node.target_x - node.rel_x) * 0.1;
                 node.rel_y += (node.target_y - node.rel_y) * 0.1;
-                
+
                 if (node.join_progress >= 1.0) {
                     node.is_joining = false;
                     printf("✅ 节点 ID:%d 已完全加入编队\n", node.id);
                 }
-            } else {
-                // 普通节点过渡
-                node.rel_x += (node.target_x - node.rel_x) * TRANSITION_SPEED;
-                node.rel_y += (node.target_y - node.rel_y) * TRANSITION_SPEED;
+            }
+            // ====================== 【脱离节点也参与移动】 ======================
+            else {
+                if (node.is_leaving) {
+                    // 慢速移动到脱离目标
+                    node.rel_x += (node.target_x - node.rel_x) * TRANSITION_SPEED * 0.6;
+                    node.rel_y += (node.target_y - node.rel_y) * TRANSITION_SPEED * 0.6;
+                }
+                else {
+                    node.rel_x += (node.target_x - node.rel_x) * TRANSITION_SPEED;
+                    node.rel_y += (node.target_y - node.rel_y) * TRANSITION_SPEED;
+                }
             }
         }
     }
@@ -467,7 +482,6 @@ namespace seven {
         UUVNode& main = nodes[0];
         double dt = config.sim_step;
 
-        // 1. 更新主节点
         double current_v_main = config.init_speed + config.acceleration * current_time;
         current_v_main = std::max(0.1, current_v_main);
 
@@ -482,64 +496,68 @@ namespace seven {
         main.pos_.lon_deg = new_lon;
         main.pos_.lat_deg = new_lat;
 
-        // 2. 队形渐变 + 避碰
-        _transition_formation();
+        if (is_transition) {
+            _transition_formation();
+        }
         apply_collision_avoidance();
+        double w = to_radians(config.heading_rate);
 
-        // 3. 角速度
-        double yaw_rate_deg = config.heading_rate;
-        double w = to_radians(yaw_rate_deg);
-
-        // 收集需要移除的节点索引（逆序删除防止失效）
         std::vector<size_t> indices_to_remove;
 
-        // 4. 逐个从节点处理
-        for (size_t i = 1; i < nodes.size(); ++i) {
+        // ====================== 逆序遍历（和Python一致） ======================
+        for (int i = nodes.size() - 1; i >= 1; --i) {
             UUVNode& node = nodes[i];
 
-            // ---------------------------
-            // 处理脱离中的节点
-            // ---------------------------
             if (node.is_leaving) {
-                double dx = node.leave_target_x - node.rel_x;
-                double dy = node.leave_target_y - node.rel_y;
-                double dist = std::hypot(dx, dy);
+                // ====================== 找最近节点 ======================
+                UUVNode* closest_node = nullptr;
+                double min_dist = 1e9;
 
-                if (dist > 0.5) {
-                    double dir_x = dx / dist;
-                    double dir_y = dy / dist;
-                    double move = 2 * current_v_main * dt;
+                for (size_t j = 1; j < nodes.size(); ++j) {
+                    UUVNode& n = nodes[j];
+                    if (n.is_leaving) continue;
 
-                    node.rel_x += dir_x * move;
-                    node.rel_y += dir_y * move;
-                    node.speed = 2 * current_v_main;
-
-                    double desired_heading_rad = std::atan2(dir_x, dir_y);
-                    double desired_heading = to_degrees(desired_heading_rad);
-                    desired_heading = fmod(desired_heading, 360.0);
-                    if (desired_heading < 0) desired_heading += 360.0;
-                    node.heading = desired_heading;
-                }
-                else {
-                    indices_to_remove.push_back(i);
-                    printf("✅ 节点 ID:%d 已到达脱离点并消失\n", node.id);
+                    double dx = n.rel_x - node.rel_x;
+                    double dy = n.rel_y - node.rel_y;
+                    double d = std::hypot(dx, dy);
+                    if (d < min_dist) {
+                        min_dist = d;
+                        closest_node = &n;
+                    }
                 }
 
-                // 更新经纬度
-                auto [node_lon, node_lat] = _enu2geo(node.rel_x, node.rel_y, main.pos_.lon_deg, main.pos_.lat_deg);
-                node.pos_.lon_deg = node_lon;
-                node.pos_.lat_deg = node_lat;
+                // ====================== 距离超过 5倍间隔 → 删除 ======================
+                if (closest_node != nullptr) {
+                    double current_dist = std::hypot(closest_node->rel_x - node.rel_x,
+                        closest_node->rel_y - node.rel_y);
+                    double delete_dist = 5 * config.rel_distance;
+
+                    printf("脱离节点ID:%d → 最近节点:%d | 距离:%.1f / 阈值:%.1f\n",
+                        node.id, closest_node->id, current_dist, delete_dist);
+
+                    if (current_dist > delete_dist) {
+                        printf("✅ 节点 ID:%d 已远离编队，消失\n", node.id);
+                        indices_to_remove.push_back(i);
+                    }
+                }
+
+                // ====================== 经纬度更新（和普通节点完全一样） ======================
+                double rx = node.rel_x;
+                double ry = node.rel_y;
+                double wx = rx * cos(main_hdg_rad) - ry * sin(main_hdg_rad);
+                double wy = rx * sin(main_hdg_rad) + ry * cos(main_hdg_rad);
+                auto [lon, lat] = _enu2geo(wx, wy, main.pos_.lon_deg, main.pos_.lat_deg);
+                node.pos_.lon_deg = lon;
+                node.pos_.lat_deg = lat;
 
                 continue;
             }
 
-            // ---------------------------
-            // 普通节点处理
-            // ---------------------------
+            // ====================== 普通节点 ======================
             double rx = node.rel_x;
             double ry = node.rel_y;
-
             double des_vx, des_vy;
+
             if (std::fabs(w) < 1e-4) {
                 des_vx = current_v_main * std::sin(main_hdg_rad);
                 des_vy = current_v_main * std::cos(main_hdg_rad);
@@ -552,34 +570,29 @@ namespace seven {
             }
 
             double desired_speed = std::hypot(des_vx, des_vy);
-            double desired_heading_rad = std::atan2(des_vx, des_vy);
-            double desired_heading = to_degrees(desired_heading_rad);
-            desired_heading = fmod(desired_heading, 360.0);
-            if (desired_heading < 0) desired_heading += 360.0;
-
             desired_speed = std::min(desired_speed, MAX_SPEED);
-
             node.speed = desired_speed;
-            node.heading = desired_heading;
 
-            double x_world = rx * std::cos(main_hdg_rad) - ry * std::sin(main_hdg_rad);
-            double y_world = rx * std::sin(main_hdg_rad) + ry * std::cos(main_hdg_rad);
+            double hdg = std::atan2(des_vx, des_vy);
+            hdg = to_degrees(hdg);
+            hdg = fmod(hdg, 360.0);
+            if (hdg < 0) hdg += 360.0;
+            node.heading = hdg;
 
-            auto [node_lon, node_lat] = _enu2geo(x_world, y_world, main.pos_.lon_deg, main.pos_.lat_deg);
-            node.pos_.lon_deg = node_lon;
-            node.pos_.lat_deg = node_lat;
-
-            node.last_rel_x = rx;
-            node.last_rel_y = ry;
+            double wx = rx * cos(main_hdg_rad) - ry * sin(main_hdg_rad);
+            double wy = rx * sin(main_hdg_rad) + ry * cos(main_hdg_rad);
+            auto [lon, lat] = _enu2geo(wx, wy, main.pos_.lon_deg, main.pos_.lat_deg);
+            node.pos_.lon_deg = lon;
+            node.pos_.lat_deg = lat;
         }
 
-        // 移除到达脱离点的节点（逆序删除）
+        // 批量删除
         if (!indices_to_remove.empty()) {
             std::sort(indices_to_remove.rbegin(), indices_to_remove.rend());
             for (size_t idx : indices_to_remove) {
                 nodes.erase(nodes.begin() + idx);
             }
-            config.node_num = static_cast<int>(nodes.size());
+            config.node_num = nodes.size();
             _set_target_formation();
         }
     }
@@ -591,9 +604,58 @@ namespace seven {
             current_time += config.sim_step;
             _update_maneuver();
             trajectory_.addFrame((current_time * 10), config.current_formation, nodes);
-            //_record_transition_step();
+            _record_transition_step();
         }
         return trajectory_;
+    }
+
+    // ====================== 【新增】编队稳定判断 ======================
+    void UUVFormationSimulator::_record_transition_step() {
+        // 没有在过渡，直接返回
+        if (!is_transition) {
+            return;
+        }
+
+        // 如果有节点正在加入编队 → 不判断稳定
+        bool any_joining = false;
+        for (const auto& n : nodes) {
+            if (n.is_joining) {
+                any_joining = true;
+                break;
+            }
+        }
+        if (any_joining) {
+            return;
+        }
+
+        // 计算最大队形误差（跳过：主节点、脱离节点、加入节点）
+        double max_err = 0.0;
+        for (const auto& n : nodes) {
+            if (n.id == 0 || n.is_leaving || n.is_joining) {
+                continue;
+            }
+            double err = std::hypot(n.rel_x - n.target_x, n.rel_y - n.target_y);
+            if (err > max_err) {
+                max_err = err;
+            }
+        }
+
+        // 误差小于阈值 → 视为稳定
+        if (max_err < ERROR_STABLE_THRESHOLD) {
+            // 如果还有节点在脱离 → 不结束过渡
+            bool has_leaving = false;
+            for (const auto& n : nodes) {
+                if (n.is_leaving) {
+                    has_leaving = true;
+                    break;
+                }
+            }
+
+            if (!has_leaving) {
+                is_transition = false;
+                printf("✅ 编队已稳定\n");
+            }
+        }
     }
 
     // ====================== 【新增】添加节点 ======================
@@ -636,7 +698,7 @@ namespace seven {
         printf("   所有节点正在重排为 %zu 节点队形...\n", nodes.size());
     }
 
-    // ====================== 【新增】删除末尾节点 ======================
+    // ====================== 删除末尾节点(改变脱离方向) ======================
     void UUVFormationSimulator::remove_last_node() {
         std::lock_guard<std::mutex> lock(sim_mutex);
         if (nodes.size() <= 2) {
@@ -644,7 +706,6 @@ namespace seven {
             return;
         }
 
-        // 找到最后一个非脱离状态的从节点
         UUVNode* leave_node = nullptr;
         for (auto it = nodes.rbegin(); it != nodes.rend(); ++it) {
             if (it->id != 0 && !it->is_leaving) {
@@ -659,14 +720,14 @@ namespace seven {
         }
 
         leave_node->is_leaving = true;
-
-        // 计算脱离方向：与主节点航向相反
         UUVNode& main = nodes[0];
-        double opposite_heading = fmod(main.heading + 180.0, 360.0);
+
+        // ====================== 【修改为Python逻辑】 ======================
+        double opposite_heading = fmod(main.heading + 90.0, 360.0);  //  改成 +90°
         if (opposite_heading < 0) opposite_heading += 360.0;
         double opposite_rad = to_radians(opposite_heading);
 
-        double leave_dist = config.rel_distance * 10.0;
+        double leave_dist = config.rel_distance * 15.0;  //  15倍距离
         leave_node->leave_target_x = leave_dist * std::sin(opposite_rad);
         leave_node->leave_target_y = leave_dist * std::cos(opposite_rad);
 
@@ -674,10 +735,7 @@ namespace seven {
         is_transition = true;
 
         printf("\n✅ 节点 ID:%d 开始脱离\n", leave_node->id);
-        printf("   脱离方向: 与编队航向相反 (%.0f°)\n", opposite_heading);
-
-        size_t remaining = std::count_if(nodes.begin(), nodes.end(), [](const UUVNode& n) { return !n.is_leaving; });
-        printf("   剩余节点已切换为 %zu 节点队形\n", remaining);
+        printf("   脱离目标相对位置: (%.1f, %.1f)\n", leave_node->leave_target_x, leave_node->leave_target_y);
     }
 
     UAVTrajectory& UUVFormationSimulator::getUAVtrajectory()
