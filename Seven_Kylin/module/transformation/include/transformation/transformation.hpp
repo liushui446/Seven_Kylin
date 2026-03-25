@@ -95,8 +95,6 @@ namespace seven{
         // 仿真步进
         UAVTrajectory& step_simulation();
 
-        void _record_transition_step();
-
         void add_node(double lon, double lat, double speed, double heading, int join_frames);
 
         void remove_last_node();

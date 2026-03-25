@@ -137,7 +137,7 @@ namespace seven {
         _set_target_formation();
         is_transition = true;
         //transition_data.clear();
-        printf("\n✅ 切换队形：%s → %s，开始记录...\n", last_formation.c_str(), config.trans_formation.c_str());
+        printf("\n✅ 切换队形：%s → %s，开始记录...\n", formationToStr(last_formation), formationToStr(config.trans_formation));
     }
 
     // ====================== 设置目标队形 【给所有正在脱离的节点单独设置目标点】 ======================
