@@ -142,7 +142,7 @@ namespace seven {
 
     // ====================== 设置目标队形 【给所有正在脱离的节点单独设置目标点】 ======================
     void UUVFormationSimulator::_set_target_formation() {
-        // 过滤掉主节点和正在脱离的节点
+        // 1. 过滤：需要参与编队的从节点（排除脱离节点）
         std::vector<UUVNode*> valid_slaves;
         for (size_t i = 1; i < nodes.size(); ++i) {
             if (!nodes[i].is_leaving) {
@@ -155,15 +155,46 @@ namespace seven {
             return;
         }
 
-        auto positions = _generate_formation_positions(slave_count);
-        for (int i = 0; i < slave_count; ++i) {
-            if (i < static_cast<int>(positions.size())) {
-                valid_slaves[i]->target_x = positions[i].first;
-                valid_slaves[i]->target_y = positions[i].second;
-            }
+        // 2. 生成新队形的所有目标点位
+        auto target_positions = _generate_formation_positions(slave_count);
+        if (target_positions.empty()) {
+            return;
         }
 
-        // 给所有正在脱离的节点单独设置目标点 = leave_target_x / leave_target_y
+        // ================================
+        // 【核心修改】最近邻目标分配
+        // 每个节点 → 分配离自己当前位置最近的目标点
+        // ================================
+        std::vector<std::pair<double, double>> available_targets = target_positions;
+
+        for (UUVNode* node : valid_slaves) {
+            int best_idx = 0;
+            double min_dist = 1e9;
+
+            // 寻找离当前节点最近的目标点
+            for (int i = 0; i < available_targets.size(); ++i) {
+                double tx = available_targets[i].first;
+                double ty = available_targets[i].second;
+
+                double dx = node->rel_x - tx;
+                double dy = node->rel_y - ty;
+                double dist = sqrt(dx*dx + dy*dy);
+
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    best_idx = i;
+                }
+            }
+
+            // 分配最近目标点，并从候选列表移除（避免重复分配）
+            node->target_x = available_targets[best_idx].first;
+            node->target_y = available_targets[best_idx].second;
+
+            // 从可用目标中删除已分配的点
+            available_targets.erase(available_targets.begin() + best_idx);
+        }
+
+        // 3. 正在脱离的节点：保持自己的脱离目标
         for (size_t i = 1; i < nodes.size(); ++i) {
             UUVNode& node = nodes[i];
             if (node.is_leaving) {
