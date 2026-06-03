@@ -587,6 +587,7 @@ namespace seven {
         }
     }
 
+    // 计算干扰范围接口
     void GNSSJammerSim::calc_jammer_area(const SimConfig& barrage_config, vector<JammerRangeResult>& jammer_range)
     {
         // ---------- 4.1 自动生成航迹（每个干扰源对应一条航迹） ----------
