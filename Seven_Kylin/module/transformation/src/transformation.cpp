@@ -884,63 +884,6 @@ namespace seven {
         g_pFormationSimulator->remove_last_node();
     }
 
-    //void Transformation_Use(CalcTempParam& task_param) {
-    //    if (g_pFormationSimulator == nullptr) {
-    //        printf("仿真器未初始化！\n");
-    //    }
-    //    UAVTrajectory trajectory_data = g_pFormationSimulator->step_simulation();
-    //    // 2. 清空并写入航迹点数组（核心：对接欺骗式干扰的结果字段）
-    //    task_param.trajectory_result.clear(); // 可选，复用对象时建议保留
-
-    //    //运行帧数计算
-    //    task_param.run_frames = g_pFormationSimulator->getRunframe() * 10;
-
-    //    auto all_trajectory = trajectory_data.getAllTrajectory();
-    //    if (all_trajectory.empty()) return;
-
-    //    //Json::Value frame_nodes = Json::arrayValue;
-    //    //frame_nodes = task_param.trajectory_result["frames"];
-
-    //    // 3. 遍历分组，构建每个帧的层级
-    //    for (const auto& group : all_trajectory) {
-    //        int frame_id = group.frame;                // 帧号
-    //        const auto& frame_nodes = group.nodes_;    // 该帧下的所有节点
-
-    //        // 4.1 构建单个帧对象
-    //        Json::Value frame_obj;
-    //        frame_obj["frame_id"] = frame_id;
-
-    //        // 4.2 构建该帧下的nodes数组
-    //        Json::Value& nodes = frame_obj["nodes"];
-    //        double max_error = 0.0;
-    //        for (const auto& node : frame_nodes) {
-    //            double err = g_pFormationSimulator->_calculate_formation_error(node);
-    //            max_error = std::max(max_error, err);
-    //            // 构建单个节点对象
-    //            Json::Value node_json;
-    //            node_json["node_id"] = node.id;
-    //            node_json["lon"] = std::round(node.pos_.lon_deg * 1e6) / 1e6;
-    //            node_json["lat"] = std::round(node.pos_.lat_deg * 1e6) / 1e6;
-    //            node_json["speed"] = std::round(node.speed * 1e3) / 1e3;
-    //            node_json["heading"] = std::round(node.heading * 1e3) / 1e3;
-    //            node_json["rel_x"] = std::round(node.rel_x * 1e3) / 1e3;
-    //            node_json["rel_y"] = std::round(node.rel_y * 1e3) / 1e3;
-    //            node_json["target_x"] = std::round(node.target_x * 1e3) / 1e3;
-    //            node_json["target_y"] = std::round(node.target_y * 1e3) / 1e3;
-    //            node_json["formation_error"] = std::round(err * 1e4) / 1e4;
-
-    //            nodes.append(node_json); // 节点加入该帧的nodes数组
-    //        }
-
-    //        // 4.3 帧对象挂载nodes数组
-    //        //frame_obj["nodes"] = nodes;
-    //        //nodes = frame_obj["nodes"];
-
-    //        // 4.4 帧对象加入frames数组
-    //        task_param.trajectory_result.append(frame_obj);
-    //    }
-    //}
-
     void Transformation_Use(CalcTempParam& task_param) {
         if (g_pFormationSimulator == nullptr) {
             printf("仿真器未初始化！\n");
