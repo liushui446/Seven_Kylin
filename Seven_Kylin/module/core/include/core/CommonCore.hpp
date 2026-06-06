@@ -454,6 +454,10 @@ namespace seven
 
     // 编队配置结构体
     struct FormationConfig {
+        // ======================================
+        // 【新增】每个编队唯一 ID，用于独立控制
+        int formation_id;
+        // ======================================
         int node_num;                // 节点数量 (4~10)
         int max_frames;           // 最大运行帧数(1500)
         int return_frames;        // 返回结果数据帧数
@@ -470,7 +474,7 @@ namespace seven
         
         //double output_interval;      // 输出间隔 (s)
 
-        FormationConfig() : node_num(10), max_frames(3000),
+        FormationConfig() : formation_id(-1), node_num(10), max_frames(3000),
             return_frames(10), rel_distance(10.0), collision_radius(4.0),
             init_speed(2.0), init_heading(0.0),heading_rate(2.0), acceleration(0.0), sim_step(0.1),
             main_node(), trans_formation(Formation_Type::Line), current_formation(Formation_Type::Line){}
@@ -479,6 +483,7 @@ namespace seven
 
         FormationConfig& operator=(const FormationConfig& other) {
 
+            this->formation_id = other.formation_id;
             this->node_num = other.node_num;
             this->max_frames = other.max_frames;
             this->return_frames = other.return_frames;
@@ -497,6 +502,59 @@ namespace seven
 
             return *this;
         }
+    };
+
+    // 多编队管理器：key = formation_id, value = 编队参数
+    using FormationMap = std::unordered_map<int, FormationConfig>;
+
+    // 或者放到上下文里
+    struct MultiFormationContext
+    {
+        // 所有编队：通过 ID 快速访问
+        FormationMap formations;
+
+        // 根据 ID 获取编队（安全）
+        bool GetFormationById(int id, FormationConfig& out_param)
+        {
+            auto it = formations.find(id);
+            if (it != formations.end())
+            {
+                out_param = it->second;
+                return true;
+            }
+            return false;
+        }
+
+        // 根据 ID 更新队形
+        void UpdateFormationType(int id, Formation_Type new_type)
+        {
+            auto it = formations.find(id);
+            if (it != formations.end())
+            {
+                it->second.trans_formation = new_type;
+            }
+        }
+
+        // 根据 ID 更新所有参数
+        void UpdateFormationConfigById(int id, FormationConfig& out_param)
+        {
+            auto it = formations.find(id);
+            if (it != formations.end())
+            {
+                it->second = out_param;
+            }
+        }
+
+        // 根据 ID 更新任意参数
+        void UpdateRelDistance(int id, double new_dist)
+        {
+            auto it = formations.find(id);
+            if (it != formations.end())
+            {
+                it->second.rel_distance = new_dist;
+            }
+        }
+
     };
 
     // 卫星参数结构体

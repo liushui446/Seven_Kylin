@@ -1,5 +1,10 @@
 #pragma once
 
+#include <atomic>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <windows.h>
 //#include <ppl.h>
 #include <thread>
 #include <mutex>
@@ -28,10 +33,10 @@ namespace seven
 		void ReloadAllThread();
 		unsigned int GetThreadNum();
 		void StartWork(bool work);
-		bool SerSwitchTaskParam(Formation_Type input);
-		bool SerTurnTaskParam(double input);
-		bool SetAddNodeTaskParam(UUVNode input);
-		bool SetRemoveNodeTaskParam();
+		bool SerSwitchTaskParam(int formation_id, Formation_Type input);
+		bool SerTurnTaskParam(int formation_id, double input);
+		bool SetAddNodeTaskParam(int formation_id, vector<UUVNode>& input);
+		bool SetRemoveNodeTaskParam(int formation_id, int num);
 		bool SubmitTask(HANDLE hPipe, const Json::Value& input, Json::Value& output);
 		bool WakeUpAThread(int noThread);
 		bool Interrupted();
@@ -40,7 +45,7 @@ namespace seven
 
 	private:
 		void ThreadFunc(int noThread);
-		
+
 	private:
 		struct Pimple;
 		std::shared_ptr<Pimple> pMem_;
@@ -49,7 +54,7 @@ namespace seven
 
 	private:
 		static std::once_flag flag_;
-		static std::shared_ptr<CalcProcessThread> instance_;	// ��̬��Ա���������浥��ʵ��  
+		static std::shared_ptr<CalcProcessThread> instance_;
 
 	public:
 		CalcProcessThread(const CalcProcessThread&) = delete;

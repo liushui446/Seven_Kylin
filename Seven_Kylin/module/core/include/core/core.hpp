@@ -7,10 +7,10 @@ namespace seven {
 
     class SEVEN_EXPORTS Core {
     private:
-        Core();  // Ë½ÓĞ¹¹Ôìº¯Êı
+        Core();  // ç§æœ‰æ„é€ å‡½æ•°
 
     public:
-        // »ñÈ¡µ¥ÀıÊµÀı
+        // è·å–å•ä¾‹å®ä¾‹
         static Core* get_init();
 
         int timeout;

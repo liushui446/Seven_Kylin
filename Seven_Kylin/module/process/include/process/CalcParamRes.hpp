@@ -84,6 +84,13 @@ namespace seven
         void SetDeceptionParams(const SimParams& params);
         SimParams GetDeceptionParams();
 
+        // 多编队上下文存取
+        void SetMultiFormationContext(const MultiFormationContext& context);
+        MultiFormationContext GetMultiFormationContext();
+
+        // 按 ID 更新单个编队配置
+        void UpdateFormationById(int formation_id, const FormationConfig& config);
+
     private:
 
         FormationConfig m_formationParams;
@@ -92,6 +99,7 @@ namespace seven
 
         SimConfig barrage_config;  //barrage params
         SimParams deception_config;
+        MultiFormationContext m_multiFormationContext;  // 多编队上下文
         std::mutex mMutex_;
 
     public:

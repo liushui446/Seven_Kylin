@@ -256,4 +256,24 @@ namespace seven
         std::unique_lock<std::mutex> lk(mMutex_);
         return deception_config;
     }
+
+    // ====================== 多编队上下文存取 ======================
+    void ContextManager::SetMultiFormationContext(const MultiFormationContext& context)
+    {
+        std::unique_lock<std::mutex> lk(mMutex_);
+        m_multiFormationContext = context;
+    }
+
+    MultiFormationContext ContextManager::GetMultiFormationContext()
+    {
+        std::unique_lock<std::mutex> lk(mMutex_);
+        return m_multiFormationContext;
+    }
+
+    void ContextManager::UpdateFormationById(int formation_id, const FormationConfig& config)
+    {
+        std::unique_lock<std::mutex> lk(mMutex_);
+        FormationConfig cfg_copy = config;
+        m_multiFormationContext.UpdateFormationConfigById(formation_id, cfg_copy);
+    }
 }

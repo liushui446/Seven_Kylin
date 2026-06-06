@@ -1,9 +1,4 @@
-﻿//#include <windows.h>
-//#include <processthreadsapi.h>
-//#include <timeapi.h>
-//#include <winnt.h>
-
-#include "process/CalcThread.hpp"
+﻿#include "process/CalcThread.hpp"
 #include "barrage/barrage.hpp"
 #include <deception/deception.hpp>
 #include <transformation/transformation.hpp>
@@ -103,10 +98,7 @@ namespace seven
 				continue;
 			}
 			pMem_->pThreads_[i] = new std::thread(std::bind(&CalcProcessThread::ThreadFunc, this, i));
-			// Linux 设置线程名（最多 15 个字符）
-			std::string name = "CalProcessThread_" + std::to_string(i);
-			pthread_setname_np(pthread_self(), name.c_str());
-			//SetThreadDescription(pMem_->pThreads_[i]->native_handle(), L"ImageProcessThread_" + i);
+			SetThreadDescription(pMem_->pThreads_[i]->native_handle(), L"ImageProcessThread_" + i);
 		}
 		return;
 	}
@@ -156,42 +148,42 @@ namespace seven
 		pMem_->bStartWork_.store(work, std::memory_order_release);
 	}
 
-	bool CalcProcessThread::SerSwitchTaskParam(Formation_Type input) {
+	bool CalcProcessThread::SerSwitchTaskParam(int formation_id, Formation_Type input) {
 		std::lock_guard<std::mutex> lk(g_task_mutex);
 		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
 			return false;
 		}
-		SwitchFormation(input);
+		SwitchFormation(formation_id, input);
 		return true;
 	}
 
-	bool CalcProcessThread::SerTurnTaskParam(double input)
+	bool CalcProcessThread::SerTurnTaskParam(int formation_id, double input)
 	{
 		std::lock_guard<std::mutex> lk(g_task_mutex);
 		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
 			return false;
 		}
-		TurnFormation(input);
+		TurnFormation(formation_id, input);
 		return true;
 	}
 
-	bool CalcProcessThread::SetAddNodeTaskParam(UUVNode input)
+	bool CalcProcessThread::SetAddNodeTaskParam(int formation_id, vector<UUVNode>& input)
 	{
 		std::lock_guard<std::mutex> lk(g_task_mutex);
 		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
 			return false;
 		}
-		AddNode(input.pos_.lon_deg, input.pos_.lat_deg, input.speed, input.heading, input.join_total_frames);
+		AddNode(formation_id, input);
 		return true;
 	}
 
-	bool CalcProcessThread::SetRemoveNodeTaskParam()
+	bool CalcProcessThread::SetRemoveNodeTaskParam(int formation_id, int num)
 	{
 		std::lock_guard<std::mutex> lk(g_task_mutex);
 		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
 			return false;
 		}
-		RemoveLastNode();
+		RemoveLastNode(formation_id, num);
 		return true;
 	}
 
@@ -312,9 +304,9 @@ namespace seven
 			{
 				return false;
 			}
-			//timeBeginPeriod(1);
+			timeBeginPeriod(1);
 			std::this_thread::sleep_for(std::chrono::microseconds(1));
-			//timeEndPeriod(1);
+			timeEndPeriod(1);
 		} while ((!pMem_->ThdStats_[noThread].CAS(threadState, static_cast<int>(Pimple::ThreadStatus::READY))) &&
 			(threadState == static_cast<int>(Pimple::ThreadStatus::DORMANT)));
 
@@ -507,9 +499,6 @@ namespace seven
 						while (true) {
 							//判断是否运行到最大帧数
 							UINT run_frames_cnt_ = CalcParamManager::Ins().GetCalcParam().run_frames_cnt;
-							/*if (run_frames_cnt_ >= (task_param->max_frames - 1)) {
-								break;
-							}*/
 
 							//判断是否被打断
 							bool is_interrupted = IsInterrupted(noThread);
@@ -520,7 +509,7 @@ namespace seven
 								pMem_->ThdStats_[noThread].SetValue(static_cast<int>(Pimple::ThreadStatus::DORMANT));
 								break;
 							}
-							FormationConfig params = ContextManager::Ins().GetFormationParams();
+							// 多编队仿真：遍历所有编队执行步进，合并输出
 							Transformation_Use(TempParam);
 							CalcParamManager::Ins().SetRunFramesCnt(TempParam.run_frames);
 							sendResultData(task_param->hPipe, TempParam.trajectory_result);
