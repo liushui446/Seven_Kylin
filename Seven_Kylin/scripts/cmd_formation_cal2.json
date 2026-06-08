@@ -1,0 +1,50 @@
+{
+    "cmd": 3,
+    "sim_type": 2,
+    "formations": [
+        {
+        "formation_id": 1,
+        "isSwitch": true,
+        "formation_type": 4,
+        "isTurn": false,
+        "heading_rate": 5.0,
+        "isAdd": false,
+        "isRemove": false
+        },
+        {
+        "formation_id": 2,
+        "isSwitch": false,
+        "isTurn": false,
+        "isAdd": false,
+        "isRemove": true,
+        "remove_num": 1
+        },
+        {
+        "formation_id": 3,
+        "isSwitch": false,
+        "isTurn": false,
+        "isAdd": true,
+        "add_node": [
+            {
+            "speed": 2.0,
+            "heading": 90.0,
+            "join_frames": 100,
+            "pos": {
+                "lat_deg": 30.0001,
+                "lon_deg": 120.0001
+            }
+            },
+            {
+            "speed": 2.0,
+            "heading": 90.0,
+            "join_frames": 100,
+            "pos": {
+                "lat_deg": 30.0002,
+                "lon_deg": 120.0002
+            }
+            }
+        ],
+        "isRemove": false
+        }
+    ]
+}

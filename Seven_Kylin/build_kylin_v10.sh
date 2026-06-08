@@ -33,6 +33,8 @@ rm -rf build && mkdir -p build && cd build
 # 关键修改：Debug + 运行时搜索当前目录
 cmake .. \
     -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_CXX_FLAGS="-fopenmp" \
+    -DCMAKE_EXE_LINKER_FLAGS="-fopenmp"
     #-DCMAKE_INSTALL_PREFIX="../install" \
     #-DCMAKE_INSTALL_RPATH="\$ORIGIN"
 
