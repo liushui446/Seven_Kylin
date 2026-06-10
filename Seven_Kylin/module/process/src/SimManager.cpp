@@ -5,8 +5,7 @@
 
 #include <thread>
 #include <chrono>
-// Windows 管道头文件
-#include <windows.h>
+
 #include <cstring>
 #include <stdexcept>
 #include <process/CalcThread.hpp>

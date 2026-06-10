@@ -5,6 +5,9 @@
 #include <fstream>
 #include <iomanip>
 #include <map>
+#include <set>
+#include <vector>
+//#include <ppl.h>
 
 using namespace Json;
 
@@ -1255,22 +1258,34 @@ namespace seven {
         // ======================
         // Phase 0：并行清空所有编队的轨迹
         // ======================
-        concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
-            {
-                UUVFormationSimulator* sim = sim_list[index].second;
-                if (sim) sim->clear_trajectory();
-            });
+        #pragma omp parallel for
+        for (size_t index = 0; index < num_formations; ++index)
+        {
+            UUVFormationSimulator* sim = sim_list[index].second;
+            if (sim) sim->clear_trajectory();
+        }
+        // concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
+        //     {
+        //         UUVFormationSimulator* sim = sim_list[index].second;
+        //         if (sim) sim->clear_trajectory();
+        //     });
 
         // ======================
         // Phase 1：逐帧循环 —— 每帧执行：步进 → 跨编队避碰 → 记录轨迹
         // ======================
         for (double t = 0.0; t < total_batch_time; t += sim_step) {
             // 1a: 并行步进 —— 所有编队各自前进一帧
-            concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
-                {
-                    UUVFormationSimulator* sim = sim_list[index].second;
-                    if (sim) sim->step_single_frame();
-                });
+            #pragma omp parallel for
+            for (size_t index = 0; index < num_formations; ++index)
+            {
+                UUVFormationSimulator* sim = sim_list[index].second;
+                if (sim) sim->step_single_frame();
+            }
+            // concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
+            //     {
+            //         UUVFormationSimulator* sim = sim_list[index].second;
+            //         if (sim) sim->step_single_frame();
+            //     });
 
             // 1b: 串行避碰 —— 跨编队全局碰撞避免（每帧都执行）
             if (num_formations > 1) {
@@ -1278,55 +1293,63 @@ namespace seven {
             }
 
             // 1c: 并行记录 —— 将避碰后的节点状态写入轨迹
-            concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
-                {
-                    UUVFormationSimulator* sim = sim_list[index].second;
-                    if (sim) sim->record_current_frame();
-                });
+            #pragma omp parallel for
+            for (size_t index = 0; index < num_formations; ++index)
+            {
+                UUVFormationSimulator* sim = sim_list[index].second;
+                if (sim) sim->record_current_frame();
+            }
+            // concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
+            //     {
+            //         UUVFormationSimulator* sim = sim_list[index].second;
+            //         if (sim) sim->record_current_frame();
+            //     });
         }
 
         // ======================
         // Phase 2：并行组装 JSON 输出
         // ======================
-        concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
-            {
-                auto& pair = sim_list[index];
-                int fid = pair.first;
-                UUVFormationSimulator* sim = pair.second;
-                if (sim == nullptr) return;
+        //concurrency::parallel_for((size_t)0, num_formations, [&](size_t index)
+        #pragma omp parallel for
+        for (size_t index = 0; index < num_formations; ++index)
+        {
+            auto& pair = sim_list[index];
+            int fid = pair.first;
+            UUVFormationSimulator* sim = pair.second;
+            if (sim == nullptr) continue;
 
-                UAVTrajectory& trajectory_data = sim->getUAVtrajectory();
-                auto all_trajectory = trajectory_data.getAllTrajectory();
-                Json::Value frames_array(Json::arrayValue);
+            UAVTrajectory& trajectory_data = sim->getUAVtrajectory();
+            auto all_trajectory = trajectory_data.getAllTrajectory();
+            Json::Value frames_array(Json::arrayValue);
 
-                for (const auto& group : all_trajectory) {
-                    Json::Value frame_obj;
-                    frame_obj["frame_id"] = group.frame;
-                    frame_obj["formation_type"] = static_cast<int>(group.formation);
-                    Json::Value nodes_array(Json::arrayValue);
+            for (const auto& group : all_trajectory) {
+                Json::Value frame_obj;
+                frame_obj["frame_id"] = group.frame;
+                frame_obj["formation_type"] = static_cast<int>(group.formation);
+                Json::Value nodes_array(Json::arrayValue);
 
-                    for (const auto& node : group.nodes_) {
-                        double err = sim->_calculate_formation_error(node);
-                        Json::Value node_json;
-                        node_json["node_id"] = node.id;
-                        node_json["lon"] = std::round(node.pos_.lon_deg * 1e6) / 1e6;
-                        node_json["lat"] = std::round(node.pos_.lat_deg * 1e6) / 1e6;
-                        node_json["speed"] = std::round(node.speed * 1e3) / 1e3;
-                        node_json["heading"] = std::round(node.heading * 1e3) / 1e3;
-                        node_json["rel_x"] = std::round(node.rel_x * 1e3) / 1e3;
-                        node_json["rel_y"] = std::round(node.rel_y * 1e3) / 1e3;
-                        node_json["target_x"] = std::round(node.target_x * 1e3) / 1e3;
-                        node_json["target_y"] = std::round(node.target_y * 1e3) / 1e3;
-                        node_json["formation_error"] = std::round(err * 1e4) / 1e4;
-                        nodes_array.append(node_json);
-                    }
-                    frame_obj["nodes"] = nodes_array;
-                    frames_array.append(frame_obj);
+                for (const auto& node : group.nodes_) {
+                    double err = sim->_calculate_formation_error(node);
+                    Json::Value node_json;
+                    node_json["node_id"] = node.id;
+                    node_json["lon"] = std::round(node.pos_.lon_deg * 1e6) / 1e6;
+                    node_json["lat"] = std::round(node.pos_.lat_deg * 1e6) / 1e6;
+                    node_json["speed"] = std::round(node.speed * 1e3) / 1e3;
+                    node_json["heading"] = std::round(node.heading * 1e3) / 1e3;
+                    node_json["rel_x"] = std::round(node.rel_x * 1e3) / 1e3;
+                    node_json["rel_y"] = std::round(node.rel_y * 1e3) / 1e3;
+                    node_json["target_x"] = std::round(node.target_x * 1e3) / 1e3;
+                    node_json["target_y"] = std::round(node.target_y * 1e3) / 1e3;
+                    node_json["formation_error"] = std::round(err * 1e4) / 1e4;
+                    nodes_array.append(node_json);
                 }
+                frame_obj["nodes"] = nodes_array;
+                frames_array.append(frame_obj);
+            }
 
-                std::lock_guard<std::mutex> lock(json_mutex);
-                formations_obj[std::to_string(fid)] = frames_array;
-            });
+            std::lock_guard<std::mutex> lock(json_mutex);
+            formations_obj[std::to_string(fid)] = frames_array;
+        }
 
         // 设置运行帧数
         if (!sim_list.empty()) {
@@ -1412,5 +1435,3 @@ namespace seven {
     }
 
 }
-
-

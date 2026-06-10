@@ -98,7 +98,10 @@ namespace seven
 				continue;
 			}
 			pMem_->pThreads_[i] = new std::thread(std::bind(&CalcProcessThread::ThreadFunc, this, i));
-			SetThreadDescription(pMem_->pThreads_[i]->native_handle(), L"ImageProcessThread_" + i);
+			// Linux 设置线程名（最多 15 个字符）
+			std::string name = "CalProcessThread_" + std::to_string(i);
+			pthread_setname_np(pthread_self(), name.c_str());
+			//SetThreadDescription(pMem_->pThreads_[i]->native_handle(), L"ImageProcessThread_" + i);
 		}
 		return;
 	}
@@ -304,9 +307,7 @@ namespace seven
 			{
 				return false;
 			}
-			timeBeginPeriod(1);
 			std::this_thread::sleep_for(std::chrono::microseconds(1));
-			timeEndPeriod(1);
 		} while ((!pMem_->ThdStats_[noThread].CAS(threadState, static_cast<int>(Pimple::ThreadStatus::READY))) &&
 			(threadState == static_cast<int>(Pimple::ThreadStatus::DORMANT)));
 

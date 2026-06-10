@@ -4,7 +4,6 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
-#include <windows.h>
 //#include <ppl.h>
 #include <thread>
 #include <mutex>

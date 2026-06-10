@@ -1,0 +1,45 @@
+{
+    "cmd": 3,
+    "sim_type": 1,
+    "formations": [
+        {
+            "formation_id": 1,
+            "pos_lon": 120.000000,
+            "pos_lat": 30.000000,
+            "num_uavs": 6,
+            "init_heading": 135.0,
+            "init_speed": 2.0,
+            "heading_rate": 1.0,
+            "interval": 10.0,
+            "collision_radius": 4.0,
+            "formation_type": 1,
+            "return_frames": 800
+        },
+        {
+            "formation_id": 2,
+            "pos_lon": 120.000600,
+            "pos_lat": 30.000100,
+            "num_uavs": 5,
+            "init_heading": 270.0,
+            "init_speed": 3.0,
+            "heading_rate": 0.0,
+            "interval": 10.0,
+            "collision_radius": 4.0,
+            "formation_type": 3,
+            "return_frames": 800
+        },
+        {
+            "formation_id": 3,
+            "pos_lon": 119.999400,
+            "pos_lat": 29.999900,
+            "num_uavs": 5,
+            "init_heading": 90.0,
+            "init_speed": 3.0,
+            "heading_rate": 0.0,
+            "interval": 10.0,
+            "collision_radius": 4.0,
+            "formation_type": 4,
+            "return_frames": 800
+        }
+    ]
+}
