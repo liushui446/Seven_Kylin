@@ -33,7 +33,7 @@ namespace seven
 		void ReloadAllThread();
 		unsigned int GetThreadNum();
 		void StartWork(bool work);
-		bool SerSwitchTaskParam(int formation_id, Formation_Type input);
+		bool SerSwitchTaskParam(int formation_id, int custom_id, Formation_Type input);
 		bool SerTurnTaskParam(int formation_id, double input);
 		bool SetAddNodeTaskParam(int formation_id, vector<UUVNode>& input);
 		bool SetRemoveNodeTaskParam(int formation_id, int num);

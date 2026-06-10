@@ -114,145 +114,53 @@ namespace seven {
             {
                 // ====================== 多编队控制 ======================
                 // 优先检测 "formations" 数组：每个编队携带自己的一套完整控制参数
-                if (input.isMember("formations") && input["formations"].isArray())
+                const Json::Value& formations_array = input["formations"];
+                result["results"] = Json::Value(Json::arrayValue);
+
+                for (int i = 0; i < formations_array.size(); ++i)
                 {
-                    const Json::Value& formations_array = input["formations"];
-                    result["results"] = Json::Value(Json::arrayValue);
+                    const Json::Value& form_entry = formations_array[i];
+                    int fid = form_entry.get("formation_id", 0).asInt();
 
-                    for (int i = 0; i < formations_array.size(); ++i)
-                    {
-                        const Json::Value& form_entry = formations_array[i];
-                        int fid = form_entry.get("formation_id", 0).asInt();
+                    bool isSwitch = form_entry.get("isSwitch", false).asBool();
+                    bool isTurn   = form_entry.get("isTurn",   false).asBool();
+                    bool isAdd    = form_entry.get("isAdd",    false).asBool();
+                    bool isRemove = form_entry.get("isRemove", false).asBool();
 
-                        bool isSwitch = form_entry.get("isSwitch", false).asBool();
-                        bool isTurn   = form_entry.get("isTurn",   false).asBool();
-                        bool isAdd    = form_entry.get("isAdd",    false).asBool();
-                        bool isRemove = form_entry.get("isRemove", false).asBool();
-
-                        Json::Value entry_result;
-                        entry_result["formation_id"] = fid;
-
-                        if (isSwitch)
-                        {
-                            try {
-                                Formation_Type trans_formation = static_cast<Formation_Type>(
-                                    form_entry.get("formation_type", 5).asInt());
-                                calc_thread_ptr->SerSwitchTaskParam(fid, trans_formation);
-                                entry_result["switch"] = "ok";
-                                printf("  编队 [%d] 切换队形成功\n", fid);
-                            }
-                            catch (const std::exception& e) {
-                                entry_result["switch"] = std::string("fail: ") + e.what();
-                                printf("  编队 [%d] 切换队形失败: %s\n", fid, e.what());
-                            }
-                        }
-
-                        if (isTurn)
-                        {
-                            try {
-                                double heading_rate = form_entry.get("heading_rate", 0.0).asDouble();
-                                calc_thread_ptr->SerTurnTaskParam(fid, heading_rate);
-                                entry_result["turn"] = "ok";
-                                printf("  编队 [%d] 转向成功, rate=%.2f\n", fid, heading_rate);
-                            }
-                            catch (const std::exception& e) {
-                                entry_result["turn"] = std::string("fail: ") + e.what();
-                                printf("  编队 [%d] 转向失败: %s\n", fid, e.what());
-                            }
-                        }
-
-                        if (isAdd)
-                        {
-                            try {
-                                vector<UUVNode> nodes;
-                                const Json::Value& nodeArray = form_entry["add_node"];
-                                if (nodeArray.isArray())
-                                {
-                                    for (int j = 0; j < nodeArray.size(); ++j)
-                                    {
-                                        UUVNode add_node_param;
-                                        const Json::Value& node = nodeArray[j];
-
-                                        add_node_param.speed = node.get("speed", 0.0).asDouble();
-                                        add_node_param.heading = node.get("heading", 0.0).asDouble();
-                                        add_node_param.join_total_frames = node.get("join_frames", 10).asInt();
-
-                                        add_node_param.pos_.lat_deg = node["pos"].get("lat_deg", 0.0).asDouble();
-                                        add_node_param.pos_.lon_deg = node["pos"].get("lon_deg", 0.0).asDouble();
-
-                                        nodes.push_back(add_node_param);
-                                    }
-                                }
-                                calc_thread_ptr->SetAddNodeTaskParam(fid, nodes);
-                                entry_result["add"] = "ok";
-                                printf("  编队 [%d] 添加 %zu 个节点成功\n", fid, nodes.size());
-                            }
-                            catch (const std::exception& e) {
-                                entry_result["add"] = std::string("fail: ") + e.what();
-                                printf("  编队 [%d] 添加节点失败: %s\n", fid, e.what());
-                            }
-                        }
-
-                        if (isRemove)
-                        {
-                            try {
-                                int remove_num = form_entry.get("remove_num", 1).asInt();
-                                calc_thread_ptr->SetRemoveNodeTaskParam(fid, remove_num);
-                                entry_result["remove"] = "ok";
-                                printf("  编队 [%d] 删除 %d 个节点成功\n", fid, remove_num);
-                            }
-                            catch (const std::exception& e) {
-                                entry_result["remove"] = std::string("fail: ") + e.what();
-                                printf("  编队 [%d] 删除节点失败: %s\n", fid, e.what());
-                            }
-                        }
-
-                        result["results"].append(entry_result);
-                    }
-
-                    result["status"] = "success";
-                    result["message"] = "multi-formation control commands processed";
-                }
-                else
-                {
-                    // ====================== 兼容旧版扁平格式 ======================
-                    int fid = input.get("formation_id", 0).asInt();
-                    bool isSwitch = input.get("isSwitch", false).asBool();
-                    bool isTurn   = input.get("isTurn",   false).asBool();
-                    bool isAdd    = input.get("isAdd",    false).asBool();
-                    bool isRemove = input.get("isRemove", false).asBool();
+                    Json::Value entry_result;
+                    entry_result["formation_id"] = fid;
 
                     if (isSwitch)
                     {
                         try {
-                            Formation_Type trans_formation = static_cast<Formation_Type>(input.get("formation_type", 5).asInt());
-                            calc_thread_ptr->SerSwitchTaskParam(fid, trans_formation);
-                            result["status"] = "success";
-                            result["message_a"] = "send switch formation command success!";
+                            Formation_Type trans_formation = static_cast<Formation_Type>(
+                                form_entry.get("formation_type", 5).asInt());
+                            int custom_id = form_entry.get("custom_id", 1).asInt();
+                            if (calc_thread_ptr->SerSwitchTaskParam(fid, custom_id,trans_formation)) {
+                                entry_result["switch"] = "ok";
+                                printf("  编队 [%d] 切换队形成功\n", fid);
+                            } else {
+                                entry_result["switch"] = "fail";
+                                printf("  编队 [%d] 切换队形失败\n", fid);
+                            }
                         }
                         catch (const std::exception& e) {
-                            calc_thread_ptr->UnInit();
-                            sim_state_ == SimState::ENDDING;
-                            result["status"] = "error";
-                            result["message"] = std::string("send switch formation command fail: ") + e.what();
-                            return -1;
+                            entry_result["switch"] = std::string("fail: ") + e.what();
+                            printf("  编队 [%d] 切换队形失败: %s\n", fid, e.what());
                         }
                     }
 
                     if (isTurn)
                     {
                         try {
-                            double heading_rate = input.get("heading_rate", 0.0).asDouble();
+                            double heading_rate = form_entry.get("heading_rate", 0.0).asDouble();
                             calc_thread_ptr->SerTurnTaskParam(fid, heading_rate);
-                            result["status"] = "success";
-                            result["message_b"] = "send turn command success!";
+                            entry_result["turn"] = "ok";
+                            printf("  编队 [%d] 转向成功, rate=%.2f\n", fid, heading_rate);
                         }
                         catch (const std::exception& e) {
-                            calc_thread_ptr->UnInit();
-                            sim_state_ == SimState::ENDDING;
-                            result["status"] = "error";
-                            result["message"] = std::string("send turn command fail: ") + e.what();
-                            return -1;
+                            entry_result["turn"] = std::string("fail: ") + e.what();
+                            printf("  编队 [%d] 转向失败: %s\n", fid, e.what());
                         }
                     }
 
@@ -260,13 +168,13 @@ namespace seven {
                     {
                         try {
                             vector<UUVNode> nodes;
-                            const Json::Value& nodeArray = input["add_node"];
+                            const Json::Value& nodeArray = form_entry["add_node"];
                             if (nodeArray.isArray())
                             {
-                                for (int i = 0; i < nodeArray.size(); ++i)
+                                for (int j = 0; j < nodeArray.size(); ++j)
                                 {
                                     UUVNode add_node_param;
-                                    const Json::Value& node = nodeArray[i];
+                                    const Json::Value& node = nodeArray[j];
 
                                     add_node_param.speed = node.get("speed", 0.0).asDouble();
                                     add_node_param.heading = node.get("heading", 0.0).asDouble();
@@ -275,39 +183,41 @@ namespace seven {
                                     add_node_param.pos_.lat_deg = node["pos"].get("lat_deg", 0.0).asDouble();
                                     add_node_param.pos_.lon_deg = node["pos"].get("lon_deg", 0.0).asDouble();
 
+                                    add_node_param.custom_rel_x = node["rel_pos"].get("x_m", 0.0).asDouble();         // 自定义阵型节点相对位置
+                                    add_node_param.custom_rel_y = node["rel_pos"].get("y_m", 0.0).asDouble();         // 自定义阵型节点相对位置
+
                                     nodes.push_back(add_node_param);
                                 }
                             }
                             calc_thread_ptr->SetAddNodeTaskParam(fid, nodes);
-                            result["status"] = "success";
-                            result["message_a"] = "add node command success!";
+                            entry_result["add"] = "ok";
+                            printf("  编队 [%d] 添加 %zu 个节点成功\n", fid, nodes.size());
                         }
                         catch (const std::exception& e) {
-                            calc_thread_ptr->UnInit();
-                            sim_state_ == SimState::ENDDING;
-                            result["status"] = "error";
-                            result["message"] = std::string("add node command fail: ") + e.what();
-                            return -1;
+                            entry_result["add"] = std::string("fail: ") + e.what();
+                            printf("  编队 [%d] 添加节点失败: %s\n", fid, e.what());
                         }
                     }
 
                     if (isRemove)
                     {
                         try {
-                            int remove_num = input.get("remove_num", 1).asInt();
+                            int remove_num = form_entry.get("remove_num", 1).asInt();
                             calc_thread_ptr->SetRemoveNodeTaskParam(fid, remove_num);
-                            result["status"] = "success";
-                            result["message_a"] = "send remove node command success!";
+                            entry_result["remove"] = "ok";
+                            printf("  编队 [%d] 删除 %d 个节点成功\n", fid, remove_num);
                         }
                         catch (const std::exception& e) {
-                            calc_thread_ptr->UnInit();
-                            sim_state_ == SimState::ENDDING;
-                            result["status"] = "error";
-                            result["message"] = std::string("send remove node command fail: ") + e.what();
-                            return -1;
+                            entry_result["remove"] = std::string("fail: ") + e.what();
+                            printf("  编队 [%d] 删除节点失败: %s\n", fid, e.what());
                         }
                     }
+
+                    result["results"].append(entry_result);
                 }
+
+                result["status"] = "success";
+                result["message"] = "multi-formation control commands processed";
                 return 0;
             }
         }
@@ -746,7 +656,6 @@ namespace seven {
             int formation_count = formations_json.size();
 
             MultiFormationContext multi_context;
-
             for (int i = 0; i < formation_count; i++)
             {
                 const Json::Value& form_json = formations_json[i];
@@ -754,6 +663,7 @@ namespace seven {
                 FormationConfig param;
 
                 param.formation_id = form_json["formation_id"].asInt();
+                param.custom_id = form_json["custom_id"].asInt();
 
                 param.main_node.lon_deg = form_json["pos_lon"].asDouble();
                 param.main_node.lat_deg = form_json["pos_lat"].asDouble();
@@ -766,13 +676,39 @@ namespace seven {
                 param.rel_distance = form_json["interval"].asDouble();
                 param.collision_radius = form_json["collision_radius"].asDouble();
                 param.trans_formation = static_cast<Formation_Type>(form_json["formation_type"].asInt());
+                param.current_formation = param.trans_formation;
 
                 UINT return_frames = form_json.get("return_frames", 4).asInt();
                 param.return_frames = return_frames;
-
                 CalcParamManager::Ins().SetReturnFramesCount(return_frames);
 
-                multi_context.formations[param.formation_id] = param;
+                //multi_context.formations[param.formation_id] = param;
+                multi_context.formations.emplace(param.formation_id, param);
+            }
+
+
+            // 解析自定义队形参数（如果存在）
+            const Json::Value& formations_custom_json = input["custom_formations"];
+            for (int i = 0; i < formations_custom_json.size(); i++)
+            {
+                const Json::Value& form_json = formations_custom_json[i];
+                CustomFormationList custom_formations;
+                // 处理自定义队形
+                const Json::Value& custom_points = form_json["custom_points"];
+                if (custom_points.isArray())
+                {
+                    CustomFormationData data;
+                    for (int j = 0; j < custom_points.size(); ++j)
+                    {
+                        const Json::Value& point = custom_points[j];
+                        double offset_x = point.get("rel_x", 0.0).asDouble();
+                        double offset_y = point.get("rel_y", 0.0).asDouble();
+                        data.node_rel_positions.push_back({ offset_x, offset_y });
+                    }
+                    data.formation_id = form_json["custom_id"].asInt();
+                    data.node_num = form_json["num_uavs"].asInt();
+                    multi_context.AddCustomFormation(data.formation_id, data);
+                }
             }
 
             CalcParamManager::Ins().SetSimTime(3000);
@@ -782,7 +718,6 @@ namespace seven {
 
             // 保存到全局上下文
             ContextManager::Ins().SetMultiFormationContext(multi_context);
-
         }
     }
     

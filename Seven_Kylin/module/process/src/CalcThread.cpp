@@ -148,13 +148,13 @@ namespace seven
 		pMem_->bStartWork_.store(work, std::memory_order_release);
 	}
 
-	bool CalcProcessThread::SerSwitchTaskParam(int formation_id, Formation_Type input) {
+	bool CalcProcessThread::SerSwitchTaskParam(int formation_id, int custom_id, Formation_Type input) {
 		std::lock_guard<std::mutex> lk(g_task_mutex);
 		if (!pMem_->bStartWork_.load(std::memory_order_acquire)) {
 			return false;
 		}
-		SwitchFormation(formation_id, input);
-		return true;
+		bool flag = SwitchFormation(formation_id, custom_id, input);
+		return flag;
 	}
 
 	bool CalcProcessThread::SerTurnTaskParam(int formation_id, double input)

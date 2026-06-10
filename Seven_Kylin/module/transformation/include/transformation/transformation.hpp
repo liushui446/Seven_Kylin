@@ -66,6 +66,7 @@ namespace seven{
     class UUVFormationSimulator {
     private:
         FormationConfig config;
+        CustomFormationList custom_data;
         std::vector<UUVNode> nodes;
         UAVTrajectory trajectory_;
         double current_time;
@@ -92,10 +93,15 @@ namespace seven{
 
     public:
         // 构造函数
-        UUVFormationSimulator(const FormationConfig& cfg);
+        UUVFormationSimulator(const FormationConfig& cfg, CustomFormationList& custom_data);
+
+        void _set_custom_id(int custom_id);
+
+        void _set_custom_data_list(CustomFormationList& data);
+        //void _set_custom_data(CustomFormationList& custom_data);
 
         // 队形切换
-        void switch_formation(const Formation_Type& cmd);
+        bool switch_formation(const Formation_Type& cmd);
 
         void add_node(vector<UUVNode>& input);
 
@@ -178,7 +184,7 @@ namespace seven{
     void SEVEN_EXPORTS Transformation_Use_Multi(int formation_id, CalcTempParam& task_param);
 
     // 队形切换（指定编队ID）
-    void SEVEN_EXPORTS SwitchFormation(int formation_id, const Formation_Type& type);
+    bool SEVEN_EXPORTS SwitchFormation(int formation_id, int custom_id, const Formation_Type& type);
 
     // 转向控制（指定编队ID）
     void SEVEN_EXPORTS TurnFormation(int formation_id, double heading_rate);
